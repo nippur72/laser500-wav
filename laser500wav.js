@@ -14,6 +14,9 @@ const options = parseOptions([
    { name: 'name', alias: 'n', type: String },   
    { name: 'address', alias: 'a', type: Number },
    { name: 'samplerate', alias: 's', type: Number },
+   { name: 'volume', alias: 'v', type: Number },
+   { name: 'stereoboost', type: Boolean },
+   { name: 'invert', type: Boolean },
    { name: 'turbo', alias: 'x', type: Boolean },   
    { name: 'turbo-address', type: Number },
    { name: 'turbo-speed', type: Number }
@@ -35,6 +38,9 @@ if(options.input === undefined) {
    console.log("  -n or --name name           specify name to be shown during CLOAD");
    console.log("  --address hexaddress        address in memory where to load the file (0x8995 default)");
    console.log("  -s or --samplerate rate     the samplerate of the WAV file (96000 default)");
+   console.log("  -v or --volume number       volume between 0 and 1 (1.0 default)");
+   console.log("  --stereoboost               boost volume for stereo cables by inverting the RIGHT channel");
+   console.log("  --invert                    inverts the polarity of the audio");
    console.log("  -x or --turbo               generates a turbo tape loadable file");
    console.log("  --turbo-address hexaddress  address in memory of the turbo tape file (0x8995 default)");
    console.log("  --turbo-speed speed         speed 1,2,3, defaults to 3 (fastest)");
@@ -45,6 +51,7 @@ if(options.input === undefined) {
 // on the real machine. One the emulator the minimum is 18000 Hz
 
 const SAMPLE_RATE = options.samplerate || 96000;
+const VOLUME = options.volume || 1.0;
 
 console.log(`sample rate is ${SAMPLE_RATE} Hz`);
 
@@ -96,9 +103,15 @@ else {
    samples = turboSamples();
 }
 
+// invert audio samples if --invert option was given
+if(options.invert) samples = invertSamples(samples);
+
+samples = new Float32Array(samples);
+const samples_inv = new Float32Array(invertSamples(samples));
+
 const wavData = {
   sampleRate: SAMPLE_RATE,
-  channelData: [ new Float32Array(samples) ]
+  channelData: !options.stereoboost ? [ samples ] : [ samples, samples_inv ]
 };
  
 const buffer = WavEncoder.encode.sync(wavData, { bitDepth: 16, float: false });
@@ -120,6 +133,11 @@ function parseOptions(optionDefinitions) {
       console.log(ex.message);
       process.exit(-1);
    }
+}
+
+function invertSamples(samples)
+{
+   return samples.map(e=>-e);
 }
 
 function tapeStructure(tapeName, fileType, startAddress, program) {   
@@ -212,15 +230,15 @@ function tapeBitsToSamples(tapeBits) {
 
    for(let t=0; t<tapeBits.length; t++) {
       if(tapeBits[t]==="S") {         
-         for(;ptr<BIT_0_SIZE; ptr++) samples.push(0.75); 
+         for(;ptr<BIT_0_SIZE; ptr++) samples.push(VOLUME); 
          ptr -= BIT_0_SIZE;
-         for(;ptr<BIT_0_SIZE; ptr++) samples.push(-0.75);
+         for(;ptr<BIT_0_SIZE; ptr++) samples.push(-VOLUME);
          ptr -= BIT_0_SIZE;
       }
       else {
-         for(;ptr<BIT_1_SIZE; ptr++) samples.push(0.75); 
+         for(;ptr<BIT_1_SIZE; ptr++) samples.push(VOLUME); 
          ptr -= BIT_1_SIZE;
-         for(;ptr<BIT_1_SIZE; ptr++) samples.push(-0.75);
+         for(;ptr<BIT_1_SIZE; ptr++) samples.push(-VOLUME);
          ptr -= BIT_1_SIZE;
       }      
    }
@@ -396,7 +414,7 @@ function TT_bitsToSamples(bits) {
    let ptr = 0 ;
    for(let t=0; t<tapeBits.length; t++) {
       const b = tapeBits[t];      
-      const s = (b == 0) ? -0.75 : 0.75;      
+      const s = (b == 0) ? -VOLUME : VOLUME;      
 
       const pixelsize = TURBO_BIT_SIZE + elongations[t];
 
@@ -416,4 +434,3 @@ function TT_dumpBits(samples) {
    console.log(s);
    console.log("]; module.exports = { tape };");   
 }
-

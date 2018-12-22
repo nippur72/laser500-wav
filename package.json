@@ -1,6 +1,6 @@
 {
-  "name": "laser500wav",
-  "version": "0.0.1",
+  "name": "laser500-wav",
+  "version": "0.1.0",
   "description": "Laser500 program to WAV (tape) converter",
   "main": "index.js",
   "bin": {
