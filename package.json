@@ -7,7 +7,12 @@
     "laser500wav": "./laser500wav.js"
   },
   "scripts": {
-    "build": "node ../laser500-exomizer/bin2js.js -i turbo_tape_stub.bin -o turbo_tape_stub.js -n stub"
+    "build": "node ../laser500-exomizer/bin2js.js -i turbo_tape_stub.bin -o turbo_tape_stub.js -n stub",
+    "test0": "node laser500wav -i test/mariel.bin -o test/mariel0 -n MARIEL0",
+    "test1": "node laser500wav -i test/mariel.bin -o test/mariel1 -n MARIEL1 -x --turbo-speed 1",
+    "test2": "node laser500wav -i test/mariel.bin -o test/mariel2 -n MARIEL2 -x --turbo-speed 2",
+    "test3": "node laser500wav -i test/mariel.bin -o test/mariel3 -n MARIEL3 -x --turbo-speed 3",
+    "test4": "node laser500wav -i test/mariel.bin -o test/mariel4 -n MARIEL4 -x --turbo-speed 4"
   },
   "keywords": [
     "laser500",
