@@ -30,7 +30,7 @@ const HEADER_LEN = 16; //128;
 const TAIL_LEN = 4; // 128;
 
 if(options.input === undefined) {
-   console.log("Usage: laser500wav [-i] file [-o file] options");
+   console.log("Usage: laser500wav -i file -o file [options]");
    console.log("  -i or --input file          the file to be converted in WAV");
    console.log("  -o or --output file         the file name to be created");
    console.log("  -b or --binary              generates a 'B:' standard binary file");
@@ -329,13 +329,14 @@ function turboSamples() {
 
 function decodeBitSize(speed) {
 
-   speed = speed || 3;
+   speed = speed || 4;
 
    let threshold, size, inv;
-           
-        if(speed === 1) { tone = 2400; threshold = 37; inv = true;  }
-   else if(speed === 2) { tone = 3000; threshold = 23; inv = true;  }
-   else if(speed === 3) { tone = 4000; threshold = 16; inv = true;  }
+        
+        if(speed === 1) { tone =  800; threshold = 86; inv = false;  }
+   else if(speed === 2) { tone = 2400; threshold = 37; inv = true;   }
+   else if(speed === 3) { tone = 3000; threshold = 23; inv = true;   }
+   else if(speed === 4) { tone = 4000; threshold = 16; inv = true;   }
    else {
       console.log("invalid turbo speed");
       process.exit(0);

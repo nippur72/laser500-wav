@@ -4,8 +4,8 @@
   "description": "Laser500 program to WAV (tape) converter",
   "main": "index.js",
   "bin": {
-   "laser500wav": "./laser500wav.js"   
-  },  
+    "laser500wav": "./laser500wav.js"
+  },
   "scripts": {
     "build": "node ../laser500-exomizer/bin2js.js -i turbo_tape_stub.bin -o turbo_tape_stub.js -n stub"
   },
