@@ -27,7 +27,7 @@ if(options.input === undefined) {
    console.log("  --invert                    inverts the polarity of the audio");
    console.log("  -x or --turbo               generates a turbo tape loadable file");
    console.log("  --turbo-address hexaddress  address in memory of the turbo tape file (0x8995 default)");
-   console.log("  --turbo-speed speed         speed 1,2,3, defaults to 3 (fastest)");
+   console.log("  --turbo-speed speed         speed 1,2,3,4 defaults to 4 (fastest)");
    process.exit(0);
 }
 
@@ -39,8 +39,8 @@ const VOLUME = options.volume || 1.0;
 
 console.log(`sample rate is ${SAMPLE_RATE} Hz`);
 
-const BIT_0_SIZE = (0.277/1000) * SAMPLE_RATE; // for a total of 277 microseconds
-const BIT_1_SIZE = BIT_0_SIZE * 2; 
+const PULSE_SHORT = (0.277/1000) * SAMPLE_RATE; // for a total of 277 microseconds
+const PULSE_LONG = PULSE_SHORT * 2;
 
 const { THRESHOLD, TURBO_BIT_SIZE, TURBO_INVERT } = decodeBitSize(options['turbo-speed']);
 
@@ -80,8 +80,8 @@ if(options.turbo === undefined) {
    // standard file
    const bytes = tapeStructure(laserName, fileType, startAddress, program);
    const bits = bytesToBits(bytes);
-   const rawBits = bitsToTapeBits(bits);
-   samples = tapeBitsToSamples(rawBits);
+   const rawBits = bitsToPulses(bits);
+   samples = pulsesToSamples(rawBits);
 }
 else {   
    samples = turboSamples();
@@ -100,7 +100,7 @@ const wavData = {
  
 const buffer = WavEncoder.encode.sync(wavData, { bitDepth: 16, float: false });
 
-fs.writeFileSync(wavName, new Buffer(buffer));
+fs.writeFileSync(wavName, Buffer.from(buffer));
 
 let gentype = fileType === "B" ? "B: standard file" : "T: standard file";
 if(options.turbo !== undefined) gentype = "TURBO tape";
@@ -109,15 +109,6 @@ console.log(`file "${wavName}" generated as ${gentype}`);
 
 
 // ***************************************************************************************
-
-function parseOptions(optionDefinitions) {
-   try {       
-      return commandLineArgs(optionDefinitions);
-   } catch(ex) {
-      console.log(ex.message);
-      process.exit(-1);
-   }
-}
 
 function invertSamples(samples)
 {
@@ -192,17 +183,17 @@ function bytesToBits(bytes) {
    return bits;
 }
 
-function bitsToTapeBits(bits) {
-   const tapeBits = [];
+function bitsToPulses(bits) {
+   const pulses = [];
    for(let t=0; t<bits.length; t++) {
       const b = bits[t];
-      if(b == 0) { tapeBits.push("S"); tapeBits.push("L"); /*tapeBits.push(1); tapeBits.push(0); tapeBits.push(1); tapeBits.push(1); tapeBits.push(0); tapeBits.push(0);*/ }
-      else       { tapeBits.push("S"); tapeBits.push("S"); tapeBits.push("S"); /*tapeBits.push(1); tapeBits.push(0); tapeBits.push(1); tapeBits.push(0); tapeBits.push(1); tapeBits.push(0);*/ } 
+      if(b == 0) { pulses.push("S"); pulses.push("L"); /*tapeBits.push(1); tapeBits.push(0); tapeBits.push(1); tapeBits.push(1); tapeBits.push(0); tapeBits.push(0);*/ }
+      else       { pulses.push("S"); pulses.push("S"); pulses.push("S"); /*tapeBits.push(1); tapeBits.push(0); tapeBits.push(1); tapeBits.push(0); tapeBits.push(1); tapeBits.push(0);*/ }
    }
-   return tapeBits;
+   return pulses;
 }
 
-function tapeBitsToSamples(tapeBits) {
+function pulsesToSamples(tapeBits) {
    const samples = [];
    let ptr = 0;
 
@@ -214,16 +205,12 @@ function tapeBitsToSamples(tapeBits) {
 
    for(let t=0; t<tapeBits.length; t++) {
       if(tapeBits[t]==="S") {         
-         for(;ptr<BIT_0_SIZE; ptr++) samples.push(VOLUME); 
-         ptr -= BIT_0_SIZE;
-         for(;ptr<BIT_0_SIZE; ptr++) samples.push(-VOLUME);
-         ptr -= BIT_0_SIZE;
+         for(;ptr<PULSE_SHORT; ptr++) samples.push(VOLUME);   ptr -= PULSE_SHORT;
+         for(;ptr<PULSE_SHORT; ptr++) samples.push(-VOLUME);  ptr -= PULSE_SHORT;
       }
       else {
-         for(;ptr<BIT_1_SIZE; ptr++) samples.push(VOLUME); 
-         ptr -= BIT_1_SIZE;
-         for(;ptr<BIT_1_SIZE; ptr++) samples.push(-VOLUME);
-         ptr -= BIT_1_SIZE;
+         for(;ptr<PULSE_LONG; ptr++) samples.push(VOLUME);    ptr -= PULSE_LONG;
+         for(;ptr<PULSE_LONG; ptr++) samples.push(-VOLUME);   ptr -= PULSE_LONG;
       }      
    }
 
@@ -232,32 +219,6 @@ function tapeBitsToSamples(tapeBits) {
    
    return samples;
 }
-
-/*
-// version with integer BIT_0_SIZE, BIT_1_SIZE 
-function tapeBitsToSamples(tapeBits) {
-   const samples = [];
-
-   // insert silence
-   for(let t=0;t<2048;t++) samples.push(-0.75);
-
-   for(let t=0; t<tapeBits.length; t++) {
-      if(tapeBits[t]==="S") {
-         for(let j=0;j<BIT_0_SIZE;j++) samples.push(0.75); 
-         for(let j=0;j<BIT_0_SIZE;j++) samples.push(-0.75);
-      }
-      else {
-         for(let j=0;j<BIT_1_SIZE;j++) samples.push(0.75); 
-         for(let j=0;j<BIT_1_SIZE;j++) samples.push(-0.75);
-      }      
-   }
-
-   // insert silence
-   for(let t=0;t<256;t++) samples.push(-0.75);
-   
-   return samples;
-}
-*/
 
 function cksum_byte(c, sum) {
    sum = (sum + c) & 0xFFFF;
@@ -300,8 +261,8 @@ function turboSamples() {
 
    const loader_bytes = tapeStructure(laserName, "T", startAddress, loader_program);
    const loader_bits = bytesToBits(loader_bytes);
-   const loader_rawBits = bitsToTapeBits(loader_bits);
-   const loader_samples = tapeBitsToSamples(loader_rawBits);
+   const loader_pulses = bitsToPulses(loader_bits);
+   const loader_samples = pulsesToSamples(loader_pulses);
 
    const bytes = TT_tapeStructure(turboAddress, program);
    const bits = bytesToBits(bytes);
@@ -372,33 +333,34 @@ function TT_tapeStructure(startAddress, program) {
 }
 
 function TT_bitsToSamples(bits) {
-   const tapeBits = [];
+   const pulses = [];
    const elongations = [];
    const elong_size = ELONGATION * SAMPLE_RATE;
    
    let last_bit = 0;
    for(let t=0; t<bits.length; t++) {
       const b = bits[t];
-      
-      // 0=SHORT pulse, 1=LONG pulse
-      if(b === 1) { 
-         tapeBits.push(1); elongations.push(t % 8 === 0 ? elong_size : 0);
-         tapeBits.push(0); elongations.push(0);
-      } else { 
-         tapeBits.push(1); elongations.push(t % 8 === 0 ? elong_size : 0);
-         tapeBits.push(1); elongations.push(0);
-         tapeBits.push(0); elongations.push(0);
-         tapeBits.push(0); elongations.push(0);
+
+      if(b === 1) {
+         // 1=SHORT pulse
+         pulses.push(1); elongations.push(t % 8 === 0 ? elong_size : 0);
+         pulses.push(0); elongations.push(0);
+      } else {
+         // 0=LONG pulse
+         pulses.push(1); elongations.push(t % 8 === 0 ? elong_size : 0);
+         pulses.push(1); elongations.push(0);
+         pulses.push(0); elongations.push(0);
+         pulses.push(0); elongations.push(0);
       } 
    }
 
-   // turn tapebits into samples 
+   // turn pulses into samples
 
    const samples = [];
   
    let ptr = 0 ;
-   for(let t=0; t<tapeBits.length; t++) {
-      const b = tapeBits[t];      
+   for(let t=0; t<pulses.length; t++) {
+      const b = pulses[t];
       const s = (b == 0) ? -VOLUME : VOLUME;      
 
       const pixelsize = TURBO_BIT_SIZE + elongations[t];
