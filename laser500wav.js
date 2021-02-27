@@ -10,7 +10,6 @@ const SILENCE_START = 0.01;
 const SILENCE_END = 0.01;
 
 const fileType = options.text ? "T" : "B";
-const HEADER_LEN = 16; //128;
 const TAIL_LEN = 4; // 128;
 
 if(options.input === undefined) {
@@ -25,6 +24,7 @@ if(options.input === undefined) {
    console.log("  -v or --volume number       volume between 0 and 1 (1.0 default)");
    console.log("  --stereoboost               boost volume for stereo cables by inverting the RIGHT channel");
    console.log("  --invert                    inverts the polarity of the audio");
+   console.log("  --header                    number of header bytes (128 default as in ROM loader)");
    console.log("  -x or --turbo               generates a turbo tape loadable file");
    console.log("  --turbo-address hexaddress  address in memory of the turbo tape file (0x8995 default)");
    console.log("  --turbo-speed speed         speed 1,2,3,4 defaults to 4 (fastest)");
@@ -36,6 +36,7 @@ if(options.input === undefined) {
 
 const SAMPLE_RATE = options.samplerate || 96000;
 const VOLUME = options.volume || 1.0;
+const HEADER_LEN = option.header || 128;
 
 console.log(`sample rate is ${SAMPLE_RATE} Hz`);
 

@@ -11,6 +11,7 @@ const options = parseOptions([
    { name: 'volume', alias: 'v', type: Number },
    { name: 'stereoboost', type: Boolean },
    { name: 'invert', type: Boolean },
+   { name: 'header', type: Number },
    { name: 'turbo', alias: 'x', type: Boolean },
    { name: 'turbo-address', type: Number },
    { name: 'turbo-speed', type: Number }
