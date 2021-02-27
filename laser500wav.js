@@ -279,7 +279,7 @@ function decodeBitSize(speed) {
 
    let threshold, size, inv;
         
-        if(speed === 1) { tone =  800; threshold = 86; inv = true;   }   // ? false in real machine?
+        if(speed === 1) { tone =  800; threshold = 86; inv = false;  }   // ? false in real machine?
    else if(speed === 2) { tone = 2400; threshold = 37; inv = true;   }
    else if(speed === 3) { tone = 3000; threshold = 23; inv = true;   }
    else if(speed === 4) { tone = 4000; threshold = 16; inv = true;   }
