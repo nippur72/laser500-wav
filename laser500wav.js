@@ -10,7 +10,6 @@ const SILENCE_START = 0.01;
 const SILENCE_END = 0.01;
 
 const fileType = options.text ? "T" : "B";
-const TAIL_LEN = 4; // 128;
 
 if(options.input === undefined) {
    console.log("Usage: laser500wav -i file -o file [options]");
@@ -36,7 +35,8 @@ if(options.input === undefined) {
 
 const SAMPLE_RATE = options.samplerate || 96000;
 const VOLUME = options.volume || 1.0;
-const HEADER_LEN = option.header || 128;
+const HEADER_LEN = options.header || 128;
+const TAIL_LEN = 4; // 128;
 
 console.log(`sample rate is ${SAMPLE_RATE} Hz`);
 
