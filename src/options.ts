@@ -1,6 +1,6 @@
-const commandLineArgs = require('command-line-args');
+import commandLineArgs from 'command-line-args';
 
-const options = parseOptions([
+export const options = parseOptions([
    { name: 'text', alias: 't', type: Boolean },
    { name: 'binary', alias: 'b', type: Boolean },
    { name: 'input', alias: 'i', type: String, defaultOption: true },
@@ -17,14 +17,14 @@ const options = parseOptions([
    { name: 'turbo-speed', type: Number }
 ]);
 
-function parseOptions(optionDefinitions) {
+function parseOptions(optionDefinitions: commandLineArgs.OptionDefinition[]) {
     try {
        return commandLineArgs(optionDefinitions);
-    } catch(ex) {
-       console.log(ex.message);
+    } catch(ex: any) {
+       if(ex.message !== undefined) console.log(ex.message);
+       else console.log(ex);
        process.exit(-1);
     }
 }
 
-module.exports = options;
 

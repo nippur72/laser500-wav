@@ -1,15 +1,18 @@
 #!/usr/bin/env node
 
-const fs = require("fs");
-const path = require('path');
+import fs from "fs";
+import path from 'path';
 
-const WavEncoder = require("wav-encoder");
-const options = require('./options');
+import WavEncoder from "wav-encoder";
+import { options } from './options';
 
 const SILENCE_START = 0.01;
 const SILENCE_END = 0.01;
 
-const fileType = options.text ? "T" : "B";
+type VZFILETYPE = "T" | "B";
+type Pulse = "S" | "L";
+
+const fileType: VZFILETYPE = options.text ? "T" : "B";
 
 if(options.input === undefined) {
    console.log("Usage: laser500wav -i file -o file [options]");
@@ -74,7 +77,7 @@ if(!fs.existsSync(fileName)) {
 
 const program = fs.readFileSync(fileName);
 
-let samples;
+let samples: number[];
 
 // normal tape
 if(options.turbo === undefined) {
@@ -91,15 +94,16 @@ else {
 // invert audio samples if --invert option was given
 if(options.invert) samples = invertSamples(samples);
 
-samples = new Float32Array(samples);
-const samples_inv = new Float32Array(invertSamples(samples));
+const f_samples = new Float32Array(samples);
+const f_samples_inv = new Float32Array(invertSamples(samples));
 
 const wavData = {
   sampleRate: SAMPLE_RATE,
-  channelData: !options.stereoboost ? [ samples ] : [ samples, samples_inv ]
+  channelData: !options.stereoboost ? [ f_samples ] : [ f_samples, f_samples_inv ]
 };
- 
-const buffer = WavEncoder.encode.sync(wavData, { bitDepth: 16, float: false });
+
+const wavoptions: WavEncoder.Options = { bitDepth: 16, float: false, symmetric: false };
+const buffer = WavEncoder.encode.sync(wavData, wavoptions);
 
 fs.writeFileSync(wavName, Buffer.from(buffer));
 
@@ -111,12 +115,12 @@ console.log(`file "${wavName}" generated as ${gentype}`);
 
 // ***************************************************************************************
 
-function invertSamples(samples)
+function invertSamples(samples: number[])
 {
    return samples.map(e=>-e);
 }
 
-function tapeStructure(tapeName, fileType, startAddress, program) {   
+function tapeStructure(tapeName: string, fileType: VZFILETYPE, startAddress: number, program: Buffer) {   
    const bytes = [];
 
    // header
@@ -160,15 +164,15 @@ function tapeStructure(tapeName, fileType, startAddress, program) {
    return bytes;
 }
 
-function lo(word) {
+function lo(word: number) {
    return word & 0xff;   
 }
 
-function hi(word) {
+function hi(word: number) {
    return (word >> 8) & 0xff;
 }
 
-function bytesToBits(bytes) {
+function bytesToBits(bytes: number[]): number[] {
    const bits = [];
    for(let t=0; t<bytes.length; t++) {
       const b = bytes[t];
@@ -184,8 +188,8 @@ function bytesToBits(bytes) {
    return bits;
 }
 
-function bitsToPulses(bits) {
-   const pulses = [];
+function bitsToPulses(bits: number[]): Pulse[] {
+   const pulses: Pulse[] = [];
    for(let t=0; t<bits.length; t++) {
       const b = bits[t];
       if(b == 0) { pulses.push("S"); pulses.push("L"); /*tapeBits.push(1); tapeBits.push(0); tapeBits.push(1); tapeBits.push(1); tapeBits.push(0); tapeBits.push(0);*/ }
@@ -194,7 +198,7 @@ function bitsToPulses(bits) {
    return pulses;
 }
 
-function pulsesToSamples(tapeBits) {
+function pulsesToSamples(tapeBits: Pulse[]): number[] {
    const samples = [];
    let ptr = 0;
 
@@ -221,18 +225,18 @@ function pulsesToSamples(tapeBits) {
    return samples;
 }
 
-function cksum_byte(c, sum) {
+function cksum_byte(c: number, sum: number) {
    sum = (sum + c) & 0xFFFF;
    return sum;
 }
 
-function cksum_word(word, sum) {
+function cksum_word(word: number, sum: number) {
    sum = cksum_byte(lo(word), sum);
    sum = cksum_byte(hi(word), sum);
    return sum;
 }
 
-function calculate_checksum(program, startAddress, endAddress) {
+function calculate_checksum(program: Buffer, startAddress: number, endAddress: number) {
    let checksum = 0;
    for(let t=0; t<program.length; t++) {
       checksum = cksum_byte(program[t], checksum);
@@ -248,7 +252,8 @@ function calculate_checksum(program, startAddress, endAddress) {
 
 function turboSamples() {
    // turbo tape file   
-   const loader_program = require("./turbo_tape_stub");
+   //const loader_program = require("./turbo_tape_stub");
+   const loader_program = fs.readFileSync("./turbo_tape_stub.bin");
 
    console.log(`shortest pulse size is ${TURBO_BIT_SIZE} samples. THRESHOLD value is ${THRESHOLD}`);
 
@@ -273,11 +278,11 @@ function turboSamples() {
    return samples;
 }
 
-function decodeBitSize(speed) {
+function decodeBitSize(speed: number) {
 
    speed = speed || 4;
 
-   let threshold, size, inv;
+   let threshold, size, inv, tone;
         
         if(speed === 1) { tone =  800; threshold = 86; inv = false;  }   // ? false in real machine?
    else if(speed === 2) { tone = 2400; threshold = 37; inv = true;   }
@@ -293,7 +298,7 @@ function decodeBitSize(speed) {
    return { THRESHOLD: threshold, TURBO_BIT_SIZE: size, TURBO_INVERT: !inv };
 }
 
-function TT_tapeStructure(startAddress, program) {   
+function TT_tapeStructure(startAddress: number, program: Buffer) {   
    const bytes = [];
 
    // trailing byte   
@@ -333,7 +338,7 @@ function TT_tapeStructure(startAddress, program) {
    return bytes;
 }
 
-function TT_bitsToSamples(bits) {
+function TT_bitsToSamples(bits: number[]) {
    const pulses = [];
    const elongations = [];
    const elong_size = ELONGATION * SAMPLE_RATE;
@@ -376,7 +381,7 @@ function TT_bitsToSamples(bits) {
    return samples;
 }
 
-function TT_dumpBits(samples) {
+function TT_dumpBits(samples: number[]) {
    console.log(`const tape = [`);
    let s = samples.map(s=> s<0 ? "0" : "1").join(",");
    console.log(s);
