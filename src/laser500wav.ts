@@ -252,7 +252,6 @@ function calculate_checksum(program: Buffer, startAddress: number, endAddress: n
 
 function turboSamples() {
    // turbo tape file   
-   //const loader_program = require("./turbo_tape_stub");
    const loader_program = fs.readFileSync("./turbo_tape_stub.bin");
 
    console.log(`shortest pulse size is ${TURBO_BIT_SIZE} samples. THRESHOLD value is ${THRESHOLD}`);

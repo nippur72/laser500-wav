@@ -7,7 +7,6 @@
   },
   "scripts": {
     "build": "npx tsc --watch",
-    "stub_build": "node ../laser500-exomizer/bin2js.js -i turbo_tape_stub.bin -o turbo_tape_stub.js -n stub",
     "test0": "node dist/laser500wav -i test/mariel.bin -o test/mariel0 -n MARIEL0",
     "test1": "node dist/laser500wav -i test/mariel.bin -o test/mariel1 -n MARIEL1 -x --turbo-speed 1",
     "test2": "node dist/laser500wav -i test/mariel.bin -o test/mariel2 -n MARIEL2 -x --turbo-speed 2",
