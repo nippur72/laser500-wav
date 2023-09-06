@@ -9,7 +9,9 @@
 
 ; place this routine in the (apparent) free space before Basic text
 
-org 0x8995 - 182 - 1 ; 0x8995 - this_file_size - 1
+; org 0x8995 - 182 - 1 ; 0x8995 - this_file_size - 1
+
+org 0
 
 start_routine:
 
