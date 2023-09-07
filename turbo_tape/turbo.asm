@@ -1,22 +1,10 @@
 ; TODO improve t-states during read_bit
 ; TODO auto RUN in stub
-; TODO bank switch loading / chunk loading
 ; TODO full pulse vs half pulse
-; TODO move stack pointer?
 
-;defc routine_length = 220; end_routine - start_routine + 1
-;defc calculated_org = 0x8995 - routine_length
+defc THRESHOLD = 54  ; this is patched externally from JavaScript
 
-; place this routine in the (apparent) free space before Basic text
-
-; org 0x8995 - 182 - 1 ; 0x8995 - this_file_size - 1
-
-org 0
-
-start_routine:
-
-defc THRESHOLD = 54  ; this is set externally by laser500wav.js
-
+org 0                ; adresses are 0-based and are relocated in JavaScript using .reloc file
 
 ;*******************************************************************
 ; Name: turbo_load()
@@ -50,11 +38,6 @@ turbo_load:
    ld a, 1           ; restore rom in bank 2
    out (0x41), a     ; and interrupts 
    ei                ;
-
-   ; *** old code without autorun ***
-   ; ret z             ; if load is ok, exit without message   
-   ; ld hl, 0x1935     ; "LOADING ERROR" message in rom
-   ; jp 0x62D3         ; call rom_prints (and RETs there)   
 
    ; *** new version with autorun ***
    jr z, autorun
@@ -251,9 +234,6 @@ read_byte:
       
    pop bc
    ret
-
-end_routine:
-
 
 ; *************************************************************************
 ; T-STATES COUNT
