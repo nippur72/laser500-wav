@@ -3,36 +3,9 @@
 // ************************************************************************ 
 
 import { calculate_checksum } from "./checksum";
-import { Tape } from "./laser500wav";
+import { Tape, TurboTape } from "./laser500wav";
 import { getTurboLoader } from "./turbo_loader";
 import { hi, lo } from "./utils";
-
-/*
-function getTurboSamples(program: Buffer, startAddress: number) {
-   // turbo tape file   
-   const loader_program = getTurboLoader(THRESHOLD);   
-
-   console.log(`shortest pulse size is ${TURBO_BIT_SIZE} samples. THRESHOLD value is ${THRESHOLD}`);
-
-   const loader_bytes = tapeStructure({ 
-      tapeName: laserName, 
-      fileType: "T", 
-      startAddress, 
-      program: loader_program
-   });
-
-   const loader_bits = bytesToBits(loader_bytes);
-   const loader_pulses = bitsToPulses(loader_bits);
-   const loader_samples = pulsesToSamples(loader_pulses);
-
-   const bytes = TT_tapeStructure(turboAddress, program);
-   const bits = bytesToBits(bytes);
-   samples = TT_bitsToSamples(bits);
-
-   samples = loader_samples.concat(samples);
-   return samples;
-}
-*/
 
 export function decodeBitSize(speed: number, SAMPLE_RATE: number) {
 
@@ -94,9 +67,10 @@ export function getTurboBytes(startAddress: number, program: Buffer) {
    return bytes;
 }
 
-export function TT_bitsToSamples(bits: number[], tape: Tape) {
+export function TT_bitsToSamples(bits: number[], tape: Tape, turbo: TurboTape) {
 
-   const { ELONGATION, SAMPLE_RATE, TURBO_BIT_SIZE, TURBO_INVERT, VOLUME } = tape;
+   const { SAMPLE_RATE, VOLUME } = tape;
+   const { ELONGATION, TURBO_BIT_SIZE, TURBO_INVERT } = turbo;
 
    const pulses = [];
    const elongations = [];

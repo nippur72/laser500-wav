@@ -28,6 +28,9 @@ export interface Tape {
    VOLUME: number;
    SILENCE_START: number;
    SILENCE_END: number;
+}
+
+export interface TurboTape {
    THRESHOLD: number;
    TURBO_BIT_SIZE: number;
    TURBO_INVERT: boolean;
@@ -64,9 +67,14 @@ function main() {
    const PULSE_SHORT = (0.277/1000) * SAMPLE_RATE; // for a total of 277 microseconds
    const PULSE_LONG = PULSE_SHORT * 2;
 
-   const { THRESHOLD, TURBO_BIT_SIZE, TURBO_INVERT } = decodeBitSize(options['turbo-speed'], SAMPLE_RATE);
+   const turboparams = decodeBitSize(options['turbo-speed'], SAMPLE_RATE);
 
-   const ELONGATION = 120 / 3670200; // about 120 t-states to add after a byte is completed
+   const turbo: TurboTape = { 
+      THRESHOLD: turboparams.THRESHOLD, 
+      TURBO_BIT_SIZE: turboparams.TURBO_BIT_SIZE, 
+      TURBO_INVERT: turboparams.TURBO_INVERT,
+      ELONGATION: 120 / 3670200    // about 120 t-states to add after a byte is completed
+   };    
 
    const fileName = options.input;
    const startAddress = (options.address && !options.turbo) || 0x8995;
@@ -109,11 +117,7 @@ function main() {
       SAMPLE_RATE: SAMPLE_RATE,
       VOLUME: VOLUME,
       SILENCE_START: 0.01,
-      SILENCE_END: 0.01,
-      THRESHOLD,
-      TURBO_BIT_SIZE,
-      TURBO_INVERT,
-      ELONGATION
+      SILENCE_END: 0.01
    };
 
    let samples: number[];
@@ -123,7 +127,7 @@ function main() {
       samples = getNormalSamples(tape);
    }
    else {   
-      samples = getTurboSamples(tape);
+      samples = getTurboSamples(tape, turbo);
    }
 
    // invert audio samples if --invert option was given
@@ -158,12 +162,12 @@ function getNormalSamples(tape: Tape) {
    return samples;
 }
 
-function getTurboSamples(tape: Tape) {
+function getTurboSamples(tape: Tape, turbo: TurboTape) {
 
    const { startAddress, program } = tape;
 
    const turbo_address = startAddress + program.length;
-   const loader_program = getTurboLoader(tape.THRESHOLD, turbo_address);   
+   const loader_program = getTurboLoader(turbo.THRESHOLD, turbo_address);   
 
    tape.fileType = "B";
    tape.startAddress = turbo_address;
@@ -176,7 +180,7 @@ function getTurboSamples(tape: Tape) {
 
    const turbo_bytes = getTurboBytes(startAddress, program);
    const turbo_bits = bytesToBits(turbo_bytes);
-   const turbo_samples = TT_bitsToSamples(turbo_bits, tape);
+   const turbo_samples = TT_bitsToSamples(turbo_bits, tape, turbo);
 
    const total_samples = samples.concat(turbo_samples);
    return total_samples;
