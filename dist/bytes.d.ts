@@ -1,0 +1,12 @@
+export declare function hex(value: number, size?: number): string;
+export declare function stringToUint8(s: string): Uint8Array;
+export declare function uint8ToString(b: Uint8Array): string;
+export declare function hi(word: number): number;
+export declare function lo(word: number): number;
+export declare function set_bit(value: number, bitn: number): number;
+export declare function reset_bit(value: number, bitn: number): number;
+export declare function set(value: number, bitmask: number): number;
+export declare function reset(value: number, bitmask: number): number;
+export declare function bit(b: number, n: number): 0 | 1;
+export declare function not_bit(b: number, n: number): 0 | 1;
+export declare function getFileExtension(fileName: string): string;
