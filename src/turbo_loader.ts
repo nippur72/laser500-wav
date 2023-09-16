@@ -1,53 +1,36 @@
-import fs from "fs";
-import path from "path";
 import { hex } from "./bytes";
+import { turbo_L310_asm_info } from "./turbo_L310_asm_info";
+import { turbo_L500_asm_info } from "./turbo_L500_asm_info";
+
+type AsmInfo = typeof turbo_L310_asm_info | typeof turbo_L500_asm_info;
 
 // get the Z80 turbo loader routine, patching two bytes and
 // relocating it at the desidered address
 export function getTurboLoader(laser500: boolean, THRESHOLD: number, relocate_address: number, fileType: number) {
-   const rootname = path.resolve(__dirname, laser500 ? "../turbo_tape/turbo_L500" : "../turbo_tape/turbo_L310");
-   const loader_program = fs.readFileSync(`${rootname}.bin`);
-
-   patch_bytes(loader_program, THRESHOLD, fileType, rootname);
-   relocate(loader_program, relocate_address, rootname);
-
+   
+   const asm_info = laser500 ? turbo_L500_asm_info : turbo_L310_asm_info;
+   const loader_program = asm_info.code;
+   patch_bytes(loader_program, THRESHOLD, fileType, asm_info);
+   const relocated = relocate(loader_program, relocate_address, asm_info);
+   
    // for debug purposes
-   {
-      const symbols = fs.readFileSync(`${rootname}.sym`).toString();
-
-      let set_threshold = getSymbolAddress(symbols, "set_threshold") + relocate_address;
+   {   
+      let set_threshold = asm_info.symbols["set_threshold"] + relocate_address;
       console.log(`const label_set_threshold = 0x${hex(set_threshold,4)};`);
 
-      let loop_file = getSymbolAddress(symbols, "loop_file") + relocate_address;
+      let loop_file = asm_info.symbols["loop_file"] + relocate_address;
       console.log(`const label_loop_file = 0x${hex(loop_file,4)};`);
 
-      let autorun = getSymbolAddress(symbols, "autorun") + relocate_address;
+      let autorun = asm_info.symbols["autorun"] + relocate_address;
       console.log(`const label_autorun = 0x${hex(autorun,4)};`);
    }
 
-   return loader_program;
+   return relocated;
 }
 
-function patch_bytes(loader_program: Buffer, THRESHOLD: number, fileType: number, rootname: string) {
-
-   // read turbo.sym symbol files
-   const symbols = fs.readFileSync(`${rootname}.sym`).toString();
-
-   // do the needed byte patches
-   loader_program[getSymbolAddress(symbols, "turbo_load"   ) + 1] = fileType; 
-   loader_program[getSymbolAddress(symbols, "set_threshold") + 1] = THRESHOLD; 
-}
-
-function getSymbolAddress(file: string, symbolname: string) {
-      
-   const regex = new RegExp(symbolname + "\\s*=\\s*\\$(?<address>[0-9a-fA-F]{4})", "g");      
-   const match = regex.exec(file);   
-   if(match === null || match.groups === undefined) throw `can't find ${symbolname} label in .sym file`;
-
-   // get label address from hex format
-   const address = Number.parseInt(match.groups["address"], 16);
-
-   return address;
+function patch_bytes(loader_program: number[], THRESHOLD: number, fileType: number, info: AsmInfo ) {      
+   loader_program[info.symbols.turbo_load + 1] = fileType;      // patches the file type B: or T:
+   loader_program[info.symbols.set_threshold + 1] = THRESHOLD;  // patches the turbo speed threshold
 }
 
 // relocate the Z80 turbo loader routine at the desidered
@@ -55,14 +38,14 @@ function getSymbolAddress(file: string, symbolname: string) {
 // .reloc file is created by the assembler and it's a list 
 // of offsets (16 bits) that needs to be changed
 
-function relocate(loader_program: Buffer, relocate_address: number, rootname: string) {
-   const reloc_info = fs.readFileSync(`${rootname}.reloc`);
-
-   for(let t=0; t<reloc_info.length; t+=2) {      
-      const patch_address = reloc_info.readUInt16LE(t);
-      const offset_value = loader_program.readUInt16LE(patch_address);
-      const relocated_value = offset_value + relocate_address;
-      loader_program.writeUInt16LE(relocated_value, patch_address);
-      //console.log(`${t}: [${patch_address}] = ${offset_value.toString(16)} -> ${relocated_value.toString(16)}`);         
-   }
+function relocate(loader_program: number[], relocate_address: number, asm_info: AsmInfo) {
+   const reloc_table = asm_info.reloc;
+   const lp = Buffer.from(loader_program);
+   for(let t=0; t<reloc_table.length; t++) {      
+      const index = reloc_table[t];
+      const address = lp.readUInt16LE(index);
+      const relocated_value = address + relocate_address;
+      lp.writeUInt16LE(relocated_value, index);      
+   }   
+   return lp;
 }
