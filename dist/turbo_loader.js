@@ -5,11 +5,12 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.getTurboLoader = void 0;
 const fs_1 = __importDefault(require("fs"));
+const path_1 = __importDefault(require("path"));
 const bytes_1 = require("./bytes");
 // get the Z80 turbo loader routine, patching two bytes and
 // relocating it at the desidered address
 function getTurboLoader(laser500, THRESHOLD, relocate_address, fileType) {
-    const rootname = laser500 ? "./turbo_tape/turbo_L500" : "./turbo_tape/turbo_L310";
+    const rootname = path_1.default.resolve(__dirname, laser500 ? "../turbo_tape/turbo_L500" : "../turbo_tape/turbo_L310");
     const loader_program = fs_1.default.readFileSync(`${rootname}.bin`);
     patch_bytes(loader_program, THRESHOLD, fileType, rootname);
     relocate(loader_program, relocate_address, rootname);

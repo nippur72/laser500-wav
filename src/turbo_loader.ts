@@ -1,10 +1,11 @@
 import fs from "fs";
+import path from "path";
 import { hex } from "./bytes";
 
 // get the Z80 turbo loader routine, patching two bytes and
 // relocating it at the desidered address
 export function getTurboLoader(laser500: boolean, THRESHOLD: number, relocate_address: number, fileType: number) {
-   const rootname = laser500 ? "./turbo_tape/turbo_L500" : "./turbo_tape/turbo_L310";
+   const rootname = path.resolve(__dirname, laser500 ? "../turbo_tape/turbo_L500" : "../turbo_tape/turbo_L310");
    const loader_program = fs.readFileSync(`${rootname}.bin`);
 
    patch_bytes(loader_program, THRESHOLD, fileType, rootname);
