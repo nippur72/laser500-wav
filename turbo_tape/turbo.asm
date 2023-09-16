@@ -1,8 +1,18 @@
 ; TODO improve t-states during read_bit
-; TODO auto RUN in stub
-; TODO full pulse vs half pulse
+; TODO load HL out of read_bit
 
 defc THRESHOLD = 54  ; this is patched externally from JavaScript
+
+IF LASER500
+   defc STARTADDR = 8662h    ; (word) start address of the loaded program
+   defc VZTYPE    = 866Bh    ; type of file F0 or F1
+   defc ROM_RUN   = 1766h    ; entry point in ROM that executes T: or B:
+ENDIF
+IF LASER310
+   defc STARTADDR = 781Eh    ; (word) start address of the loaded program   
+   defc VZTYPE    = 7AD2h    ; type of file F0 or F1
+   defc ROM_RUN   = 36BFh    ; entry point in ROM that executes T: or B:        
+ENDIF
 
 org 0                ; adresses are 0-based and are relocated in JavaScript using .reloc file
 
@@ -26,50 +36,77 @@ org 0                ; adresses are 0-based and are relocated in JavaScript usin
 ;
 
 turbo_load:
+
+   ld a, $f1       ; file type is fixed and it's changed from JavaScript
+   ld (VZTYPE), a  ;     
+
    di              ; disables interrupts 
-   ld a, 2         ; and switchs I/O page 
-   out (0x41),a    ; in bank 2
 
-   call do_turbo_load
+   IF LASER500
+      ld a, 2        ; selects I/O
+      out (41h),a    ; in bank 2
+   ENDIF
 
-   ld a, (0x8669)    ; restore border color
-   out (0x44), a 
+   call do_turbo_load   ; Z loaded ok, NZ there's load error
 
-   ld a, 1           ; restore rom in bank 2
-   out (0x41), a     ; and interrupts 
-   ei                ;
+   IF LASER500
+      ld a, (8669h)     ; restore border color
+      out (44h), a 
+      ld a, 1           ; restore page 1 ROM
+      out (41h), a      ; in bank 2
+   ENDIF      
 
-   ; *** new version with autorun ***
+   ei                   ; restore interrupts 
+   
    jr z, autorun
 
 error:
-   ld hl, 0x1935     ; "LOADING ERROR" message in rom
-   jp 0x62D3         ; call rom_prints (and RETs there)   
+   IF LASER500
+      ld hl, 1935h      ; "LOADING ERROR" message in rom
+      jp 62D3h          ; call rom_prints (and RETs there)  ; JP 18F3 is the rom entry for loading error                        
+   ENDIF
+   IF LASER310      
+      ld hl, 384Ah      ; text "LOADING ERROR"
+      call 28A7h        ; prints message 
+      ld hl, 1929h      ; text "READY"
+      call 28A7h        ; prints message       
+      jp 1AE8h          ; return to basic
+   ENDIF
 
 autorun:
-   ld hl, 0x5552     ; stuffs "RU" in keyboard buffer
-   ld (0x8289),hl 
-   ld hl, 0x0d4e     ; stuffs "N\n"  in keyboard buffer
-   ld (0x8289+2),hl 
-   ld hl, 0x8289     ; keyboard buffer pointer
-   ld (0x85f7), hl
-   rst 0             ; call reset which triggers keyboard buffer
+   jp ROM_RUN           ; executes the T: or B: program from ROM
 
 do_turbo_load:
-   ; change border color to red (waiting for sync)
-   ld a, (0x8669)
-   and 0x0F
-   or 0x40
-   out (0x44), a 
+   ; change screen color to signal "waiting for sync"
+   IF LASER500
+      ; change border color to red
+      ld a, (8669h)
+      and 0Fh
+      or 40h
+      out (44h), a 
+   ENDIF
+   IF LASER310          
+      ; change screen color to orange
+      ld a, 16          
+      ld (6800h), a    
+   ENDIF
 
    ; synchronizes with header
    call sync_tape 
 
-   ; change border color to green (sync OK)
-   ld a, (0x8669)
-   and 0x0F
-   or 0xA0
-   out (0x44), a 
+   ; change color to signal "sync OK"
+   IF LASER500
+      ; green border color   
+      ld a, (8669h)
+      and $0F
+      or $A0
+      out (44h), a 
+   ENDIF
+   IF LASER310          
+      ; green screen color
+      xor a          
+      ld (6800h), a    
+   ENDIF
    
    ; checksum = 0
    ld hl, 0
@@ -91,7 +128,10 @@ do_turbo_load:
    call read_byte
    ld b, a
    call checksum_byte
-      
+
+   ; save start address for later execution
+   ld (STARTADDR), de
+
    ; loads file
 
    loop_file:
@@ -104,29 +144,20 @@ do_turbo_load:
       or b               ;                                       /
       jr nz, loop_file   ;
 
-   ; verify checksum with tape, returns with Z=1 load error
+   ; verify in-memory checksum with the one saved on tape, returns NZ load error, Z load ok
    call read_byte        ; a = lo(checksum)
    cp l                  ;
    ret nz                ;
    call read_byte        ; a = hi(checksum)
    cp h                  ;   
-   ret nz                ;
-
-   ; move pointer to end of basic program (VARTAB)
-   ld (0x83e9), de
-
-   ; support for continue dropped
-   ; call read_byte        ; a = continue? (00=stop)
-   ; or a
-   ; jr nz, do_turbo_load
-
-   ret                   ;
+   ;ret nz               ; implicit ret nz
+   ret                   
 
 checksum_byte:   
    ; makes checksum of A in HL (HL = HL + A)
    add l
    ld l, a
-   ld a, 0
+   ld a, 0    ; can't do "xor a" here, we need the carry intact
    adc h
    ld h, a
    ret
@@ -153,21 +184,30 @@ read_bit:
 
    push hl
 
-load_threshold:
-   ld hl, 0x6800
+   ld hl, 6800h
 
    xor a
 
    ; counts the HIGH (positive) semiwave
    read_bit_loop_H:
-      inc a                         
-      bit 7, (hl)
+      inc a      
+      IF LASER500                   
+         bit 7, (hl)
+      ENDIF
+      IF LASER310                   
+         bit 6, (hl)
+      ENDIF
       jr nz, read_bit_loop_H
    
    ; counts the LOW (negative) semiwave
    read_bit_loop_L:
       inc a                         
-      bit 7, (hl)                  
+      IF LASER500                   
+         bit 7, (hl)
+      ENDIF
+      IF LASER310                   
+         bit 6, (hl)
+      ENDIF
       jr z, read_bit_loop_L
 
 set_threshold:
@@ -184,7 +224,7 @@ set_threshold:
 ; Returns: nothing (just waits in time)
 ; Register modified: A, HL, DE
 ; 
-; Header is a 2 byte signature that indicates the start
+; Header is a 2 byte signature (AAh,55h) that indicates the start
 ; of the input bit stream.
 ;
 ; Once the last bit in the header is read and matched 
@@ -194,21 +234,18 @@ set_threshold:
 ;
 
 sync_tape:
-   loop_sync:
-      call read_bit         ; read bit from tape, C=bit
-      
-      rl e                  ; puts bit in shift register {d,e}
-      rl d                  ; DE holds the 16 bit shift register for matching with the header 
-      
-      ; compare shift register with 0xAA, 0x55 (the header bytes)
+   call read_bit         ; read bit from tape, C=bit
+   
+   rl e                  ; puts bit in shift register {d,e}
+   rl d                  ; DE holds the 16 bit shift register for matching with the header 
+   
+   ld  a, $AA            ; compare with AA
+   cp  d
+   jr  nz, sync_tape
 
-      ld  a, 0xAA
-      cp  d
-      jr  nz, loop_sync
-
-      cpl
-      cp  e
-      jr  nz, loop_sync
+   cpl                   ; compare with 55 (AA negated)
+   cp  e
+   jr  nz, sync_tape
    ret
 
 ;**************************************************
@@ -223,7 +260,7 @@ sync_tape:
 read_byte:
    push bc      
 
-   ld bc, 0x0800         ; b=7 counts bits, c=0 read shift register
+   ld bc, 0800h         ; b=7 counts bits, c=0 read shift register
 
    loop_byte:
       call read_bit      ; C=bit read

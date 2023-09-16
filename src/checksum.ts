@@ -1,4 +1,4 @@
-import { hi, lo } from "./utils";
+import { hi, lo } from "./bytes";
 
 function cksum_byte(c: number, sum: number) {
    sum = (sum + c) & 0xFFFF;

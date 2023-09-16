@@ -1,5 +1,15 @@
-@del turbo.bin
+@del *.bin
 
-z80asm -s -b -l -reloc-info turbo.asm 
+z80asm -s -b -l -reloc-info -DLASER500=1 -oturbo_L500.bin turbo.asm
+copy turbo.sym   turbo_L500.sym
+copy turbo.lis   turbo_L500.lis
+
+z80asm -s -b -l -reloc-info -DLASER310=1 -oturbo_L310.bin turbo.asm
+copy turbo.sym   turbo_L310.sym
+copy turbo.lis   turbo_L310.lis
+
+@del *.o
+@del turbo.sym
+@del turbo.lis
 
 dir *.bin

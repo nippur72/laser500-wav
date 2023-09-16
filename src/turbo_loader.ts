@@ -1,39 +1,52 @@
 import fs from "fs";
+import { hex } from "./bytes";
 
-// get the Z80 turbo loader routine, patching the "THRESHOLD" value and
+// get the Z80 turbo loader routine, patching two bytes and
 // relocating it at the desidered address
-export function getTurboLoader(THRESHOLD: number, relocate_address: number) {
-   const loader_program = fs.readFileSync("./turbo_tape/turbo.bin");
+export function getTurboLoader(laser500: boolean, THRESHOLD: number, relocate_address: number, fileType: number) {
+   const rootname = laser500 ? "./turbo_tape/turbo_L500" : "./turbo_tape/turbo_L310";
+   const loader_program = fs.readFileSync(`${rootname}.bin`);
 
-   patch_threshold(loader_program, THRESHOLD);
-   relocate(loader_program, relocate_address);
+   patch_bytes(loader_program, THRESHOLD, fileType, rootname);
+   relocate(loader_program, relocate_address, rootname);
+
+   // for debug purposes
+   {
+      const symbols = fs.readFileSync(`${rootname}.sym`).toString();
+
+      let set_threshold = getSymbolAddress(symbols, "set_threshold") + relocate_address;
+      console.log(`const label_set_threshold = 0x${hex(set_threshold,4)};`);
+
+      let loop_file = getSymbolAddress(symbols, "loop_file") + relocate_address;
+      console.log(`const label_loop_file = 0x${hex(loop_file,4)};`);
+
+      let autorun = getSymbolAddress(symbols, "autorun") + relocate_address;
+      console.log(`const label_autorun = 0x${hex(autorun,4)};`);
+   }
+
    return loader_program;
 }
 
-// patch the "THRESHOLD" value in the turbo loader routine by
-// changing the Z80 instruction: "set_threshold: CP THRESHOLD"
-// the exact patching point is derived from symbol file (.sym)
-// by looking at the label "set_threshold:"
-// the symbol file is created by the assembler
-
-function patch_threshold(loader_program: Buffer, THRESHOLD: number) {
+function patch_bytes(loader_program: Buffer, THRESHOLD: number, fileType: number, rootname: string) {
 
    // read turbo.sym symbol files
-   const symbols = fs.readFileSync("./turbo_tape/turbo.sym").toString();
+   const symbols = fs.readFileSync(`${rootname}.sym`).toString();
 
-   // locate 'set_threshold' label with a regex
-   const regex = /set_threshold\s*=\s*\$(?<address>[0-9a-f]{4})/g;   
-   const match = regex.exec(symbols);
-   if(match === null || match.groups === undefined) throw "can't find set_threshold label in turbo.sym";
+   // do the needed byte patches
+   loader_program[getSymbolAddress(symbols, "turbo_load"   ) + 1] = fileType; 
+   loader_program[getSymbolAddress(symbols, "set_threshold") + 1] = THRESHOLD; 
+}
+
+function getSymbolAddress(file: string, symbolname: string) {
+      
+   const regex = new RegExp(symbolname + "\\s*=\\s*\\$(?<address>[0-9a-fA-F]{4})", "g");      
+   const match = regex.exec(file);   
+   if(match === null || match.groups === undefined) throw `can't find ${symbolname} label in .sym file`;
 
    // get label address from hex format
    const address = Number.parseInt(match.groups["address"], 16);
-   
-   // goes to "CP" instruction argument by skipping 1 byte
-   const offset = address + 1; 
 
-   // do the patch
-   loader_program[offset] = THRESHOLD;
+   return address;
 }
 
 // relocate the Z80 turbo loader routine at the desidered
@@ -41,8 +54,8 @@ function patch_threshold(loader_program: Buffer, THRESHOLD: number) {
 // .reloc file is created by the assembler and it's a list 
 // of offsets (16 bits) that needs to be changed
 
-function relocate(loader_program: Buffer, relocate_address: number) {
-   const reloc_info = fs.readFileSync("./turbo_tape/turbo.reloc");
+function relocate(loader_program: Buffer, relocate_address: number, rootname: string) {
+   const reloc_info = fs.readFileSync(`${rootname}.reloc`);
 
    for(let t=0; t<reloc_info.length; t+=2) {      
       const patch_address = reloc_info.readUInt16LE(t);

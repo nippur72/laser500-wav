@@ -1,14 +1,14 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.calculate_checksum = void 0;
-const utils_1 = require("./utils");
+const bytes_1 = require("./bytes");
 function cksum_byte(c, sum) {
     sum = (sum + c) & 0xFFFF;
     return sum;
 }
 function cksum_word(word, sum) {
-    sum = cksum_byte((0, utils_1.lo)(word), sum);
-    sum = cksum_byte((0, utils_1.hi)(word), sum);
+    sum = cksum_byte((0, bytes_1.lo)(word), sum);
+    sum = cksum_byte((0, bytes_1.hi)(word), sum);
     return sum;
 }
 function calculate_checksum(program, startAddress, endAddress) {

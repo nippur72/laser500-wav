@@ -1,9 +1,11 @@
 {
   "name": "laser500-wav",
-  "version": "0.1.2",
-  "description": "Laser500 program to WAV (tape) converter",
+  "version": "1.0.0",
+  "description": "Laser310/500 program to WAV (tape) converter",
   "bin": {
-    "laser500wav": "dist/laser500wav.js"
+    "laser500wav": "dist/laser500wav.js",
+    "vzpack": "dist/vzpack.js",
+    "vzunpack": "dist/vzunpack.js"
   },
   "scripts": {
     "build": "npx tsc --watch",
@@ -11,6 +13,9 @@
   },
   "keywords": [
     "laser500",
+    "laser310",
+    "vz200",
+    "vz300",
     "vtech",
     "videotechnology"
   ],
@@ -18,7 +23,6 @@
   "license": "MIT",
   "dependencies": {
     "command-line-args": "^5.0.2",
-    "fili": "^2.0.3",
     "wav-encoder": "^1.3.0"
   },
   "devDependencies": {

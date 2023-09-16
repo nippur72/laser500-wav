@@ -1,6 +1,9 @@
 #!/usr/bin/env node
 
-// TODO turbo tape flush tail ?
+// TODO count T states, elongation in sync_tape
+// TODO elonagtion after turbo header
+// TODO autorun different "T" and "B"
+// TODO investigate polarity inversion
 
 import fs from "fs";
 import path from 'path';
@@ -8,11 +11,12 @@ import path from 'path';
 import WavEncoder from "wav-encoder";
 import { options } from './options';
 import { getTurboLoader } from "./turbo_loader";
-import { hi, lo } from "./utils";
+import { hex, hi, lo } from "./bytes";
 import { calculate_checksum } from "./checksum";
 import { TT_bitsToSamples, decodeBitSize, getTurboBytes } from "./turbo_encoder";
+import { VZ_BASIC, VZ_BINARY, VZFILETYPE, unpackvz } from "./vz";
+import { fix_cassette_port } from "./fix_tape";
 
-type VZFILETYPE = "T" | "B";
 type Pulse = "S" | "L";
 
 export interface Tape {
@@ -26,36 +30,39 @@ export interface Tape {
    PULSE_LONG: number;
    SAMPLE_RATE: number;
    VOLUME: number;
-   SILENCE_START: number;
-   SILENCE_END: number;
+   laser500: boolean;
 }
 
 export interface TurboTape {
    THRESHOLD: number;
-   TURBO_BIT_SIZE: number;
-   TURBO_INVERT: boolean;
-   ELONGATION: number;
+   TURBO_HALFPULSE_SIZE: number;
+   TURBO_INVERT: boolean;   
 }
 
 function main() {
-   if(options.input === undefined) {
+   if(options.input === undefined || options.output === undefined || (options.l310===undefined && options.l500===undefined)) {
       console.log("Usage: laser500wav -i file -o file [options]");
-      console.log("  -i or --input file          the file to be converted in WAV");
+      console.log("  -i or --input file          the VZ file to be converted in WAV");
       console.log("  -o or --output file         the file name to be created");
-      console.log("  -b or --binary              generates a 'B:' standard binary file");
-      console.log("  -t or --text                generates a 'T:' standard BASIC text file (default)");
-      console.log("  -n or --name name           specify name to be shown during CLOAD");
-      console.log("  --address hexaddress        address in memory where to load the file (0x8995 default)");
+      console.log("  --l500                      targets Laser 500/700");
+      console.log("  --l310                      targets Laser 110/210/310 VZ 200/300");
       console.log("  -s or --samplerate rate     the samplerate of the WAV file (96000 default)");
       console.log("  -v or --volume number       volume between 0 and 1 (1.0 default)");
       console.log("  --stereoboost               boost volume for stereo cables by inverting the RIGHT channel");
       console.log("  --invert                    inverts the polarity of the audio");
       console.log("  --header                    number of header bytes (128 default as in ROM loader)");
+      console.log("  --pulsems n                 ROM loader pulse width in microseconds (277 default)");
       console.log("  -x or --turbo               generates a turbo tape loadable file");
-      console.log("  --turbo-address hexaddress  address in memory of the turbo tape file (0x8995 default)");
       console.log("  --turbo-speed speed         speed 1,2,3,4 defaults to 4 (fastest)");
       process.exit(0);
    }
+
+   if(options.l310 !==undefined && options.l500 !== undefined) {
+      console.log("specify only one --L option: 310 or 500");
+      process.exit(0);
+   }
+
+   const laser500 = options.l500 && !options.l310;
 
    // note on SAMPLE_RATE: when using turbo tape 48000 Hz is the minimum to work
    // on the real machine. One the emulator the minimum is 18000 Hz
@@ -64,36 +71,20 @@ function main() {
    const VOLUME = options.volume || 1.0;
    const HEADER_LEN = options.header || 128;   
    const TAIL_LEN = 4; // 128; // TODO make it option?   
-   const PULSE_SHORT = (0.277/1000) * SAMPLE_RATE; // for a total of 277 microseconds
+   const pulsems = (options.pulsems || 277)/1000000;  // for a total of 277 microseconds
+   const PULSE_SHORT = pulsems * SAMPLE_RATE; 
    const PULSE_LONG = PULSE_SHORT * 2;
 
-   const turboparams = decodeBitSize(options['turbo-speed'], SAMPLE_RATE);
+   const turboparams = decodeBitSize(options['turbo-speed'], SAMPLE_RATE, laser500);
 
    const turbo: TurboTape = { 
       THRESHOLD: turboparams.THRESHOLD, 
-      TURBO_BIT_SIZE: turboparams.TURBO_BIT_SIZE, 
-      TURBO_INVERT: turboparams.TURBO_INVERT,
-      ELONGATION: 120 / 3670200    // about 120 t-states to add after a byte is completed
+      TURBO_HALFPULSE_SIZE: turboparams.TURBO_HALFPULSE_SIZE, 
+      TURBO_INVERT: turboparams.TURBO_INVERT      
    };    
 
    const fileName = options.input;
-   const startAddress = (options.address && !options.turbo) || 0x8995;
-   const turboAddress = options['turbo-address'] || 0x8995;
-
-   if(options.turbo) console.log(`turbo start address = 0x${turboAddress.toString(16)}`);
-   else              console.log(`start address = 0x${startAddress.toString(16)}`);
-
-   const fileNameWithoutExtension = path.parse(fileName).name;
-
-   const tapeName = options.name || fileNameWithoutExtension;
-
-   if(tapeName.length > 15) {
-      // max is 15 chars + \0
-      console.log(`'${tapeName}' tape name too long`);
-      process.exit(0);
-   }
-
-   const outputName = options.output || fileNameWithoutExtension;
+   const outputName = options.output;
    const wavName = outputName + ".wav";
 
    if(!fs.existsSync(fileName)) {
@@ -101,24 +92,26 @@ function main() {
       process.exit(0);
    }
 
-   const program = fs.readFileSync(fileName);
-
-   const fileType: VZFILETYPE = options.text ? "T" : options.binary ? "B" : "T";
+   const VZ = unpackvz(fs.readFileSync(fileName));
+   
+   const fileType = VZ.type;
    
    const tape: Tape = {
-      tapeName,
+      tapeName: VZ.filename,
       fileType, 
-      startAddress,
-      program,
+      startAddress: VZ.start,
+      program: Buffer.from(VZ.data),
       headerLen: HEADER_LEN,
       tailLen: TAIL_LEN,
       PULSE_SHORT: PULSE_SHORT,
       PULSE_LONG: PULSE_LONG,
       SAMPLE_RATE: SAMPLE_RATE,
       VOLUME: VOLUME,
-      SILENCE_START: 0.01,
-      SILENCE_END: 0.01
+      laser500
    };
+
+   console.log(`target is ${tape.laser500 ? 'Laser 500' : 'Laser 310'} `);   
+   console.log(`SAVING ${fileType === VZ_BASIC ? "T" : "B"}: '${VZ.filename}' from $${hex(VZ.start,4)}, ${VZ.data.length} bytes`);
 
    let samples: number[];
 
@@ -132,6 +125,8 @@ function main() {
 
    // invert audio samples if --invert option was given
    if(options.invert) samples = invertSamples(samples);
+   
+   // fix_cassette_port(samples, SAMPLE_RATE);
 
    const f_samples = new Float32Array(samples);
    const f_samples_inv = new Float32Array(invertSamples(samples));
@@ -146,19 +141,66 @@ function main() {
 
    fs.writeFileSync(wavName, Buffer.from(buffer));
 
-   let gentype = fileType === "B" ? "B: standard file" : "T: standard file";
+   let gentype = fileType === VZ_BINARY ? "B: standard file" : "T: standard file";
    if(options.turbo !== undefined) gentype = "TURBO tape";
 
    console.log(`file "${wavName}" generated as ${gentype}`);   
+
+   /*
+   // write inverted FFT 
+   {
+      const { fft, ifft, util } = require('fft-js');
+
+      const FFTSIZE = 256;
+      
+      let in_samples = Array.from(f_samples);
+      let out_samples: number[] = [];
+
+      for(let i=0; i<in_samples.length-FFTSIZE; i+=FFTSIZE) {
+         const realInput = in_samples.slice(i,i+FFTSIZE);          
+         const phasors = fft(realInput);
+         for(let j=32; j<FFTSIZE; j++) {
+            phasors[j][0] = 0;
+            phasors[j][1] = 0;
+         }
+         const signal = ifft(phasors) as [number, number][];
+         const real = signal.map(e=>e[0]);         
+         out_samples.push(...real);
+      }
+      
+      const wavData = {
+         sampleRate: SAMPLE_RATE,
+         channelData: [ new Float32Array(out_samples) ] 
+      };
+
+      const wavoptions: WavEncoder.Options = { bitDepth: 16, float: false, symmetric: false };
+      const buffer = WavEncoder.encode.sync(wavData, wavoptions);
+   
+      fs.writeFileSync("testfft.wav", Buffer.from(buffer));      
+   }
+   */
 }
 
 // ***************************************************************************************
 
 function getNormalSamples(tape: Tape) {
-   const bytes = tapeStructure(tape);
-   const bits = bytesToBits(bytes);
-   const pulses = bitsToPulses(bits);
-   const samples = pulsesToSamples(pulses, tape);
+   const { header_bytes, body_bytes } = tapeStructure(tape);
+
+   // header
+   const header_bits = bytesToBits(header_bytes);
+   const header_pulses = bitsToPulses(header_bits);
+   const header_samples = pulsesToSamples(header_pulses, tape);
+
+   // gap between header and body in Laser310
+   let gap: number[] = tape.laser500 ? [] : getGapSamples(tape);
+
+   // body
+   const body_bits = bytesToBits(body_bytes);
+   const body_pulses = bitsToPulses(body_bits);
+   const body_samples = pulsesToSamples(body_pulses, tape);
+
+   const samples = header_samples.concat(gap).concat(body_samples);
+
    return samples;
 }
 
@@ -167,23 +209,38 @@ function getTurboSamples(tape: Tape, turbo: TurboTape) {
    const { startAddress, program } = tape;
 
    const turbo_address = startAddress + program.length;
-   const loader_program = getTurboLoader(turbo.THRESHOLD, turbo_address);   
+   const loader_program = getTurboLoader(tape.laser500, turbo.THRESHOLD, turbo_address, tape.fileType);   
 
-   tape.fileType = "B";
+   tape.fileType = VZ_BINARY;
    tape.startAddress = turbo_address;
    tape.program = loader_program;
 
-   const bytes = tapeStructure(tape);
-   const bits = bytesToBits(bytes);
-   const pulses = bitsToPulses(bits);
-   const samples = pulsesToSamples(pulses, tape);
+   const { header_bytes, body_bytes } = tapeStructure(tape);
+
+   const header_bits = bytesToBits(header_bytes);
+   const header_pulses = bitsToPulses(header_bits);
+   const header_samples = pulsesToSamples(header_pulses, tape);
+
+   // gap between header and body in Laser310
+   let gap: number[] = tape.laser500 ? [] : getGapSamples(tape);
+
+   // body
+
+   const body_bits = bytesToBits(body_bytes);
+   const body_pulses = bitsToPulses(body_bits);
+   const body_samples = pulsesToSamples(body_pulses, tape);   
 
    const turbo_bytes = getTurboBytes(startAddress, program);
+
+// patch
+//for(let t=0; t<turbo_bytes.length; t++) turbo_bytes[t] = t % 2 + 2;
+
    const turbo_bits = bytesToBits(turbo_bytes);
    const turbo_samples = TT_bitsToSamples(turbo_bits, tape, turbo);
 
-   const total_samples = samples.concat(turbo_samples);
-   return total_samples;
+   const samples = header_samples.concat(gap).concat(body_samples).concat(turbo_samples);
+
+   return samples;
 }
 
 function invertSamples(samples: number[])
@@ -192,55 +249,57 @@ function invertSamples(samples: number[])
 }
 
 function tapeStructure(tape: Tape) {   
-   const bytes = [];
+   const header_bytes = [];
+   const body_bytes = [];
 
-   const { tapeName, fileType, startAddress, program, headerLen, tailLen } = tape;
+   const { tapeName, fileType, startAddress, program, headerLen, tailLen, laser500 } = tape;
 
    // header   
-   for(let t=0; t<headerLen; t++) bytes.push(0x80);
-   for(let t=0; t<5; t++) bytes.push(0xfe);
+   for(let t=0; t<headerLen; t++) header_bytes.push(0x80);
+   for(let t=0; t<5; t++) header_bytes.push(0xfe);
 
    // file type
-   if(fileType == "T") bytes.push(0xf0);
-   else                bytes.push(0xf1);
+   header_bytes.push(fileType);   
 
    // file name
-   for(let t=0; t<tapeName.length; t++) bytes.push(tapeName.charCodeAt(t));
-   bytes.push(0x00);
-
-   // header2
-   for(let t=0; t<5; t++) bytes.push(0x80); // additional header to allow print of file name
-
-   for(let t=0; t<10; t++) bytes.push(0x80);
-   bytes.push(0xff);
+   for(let t=0; t<tapeName.length; t++) header_bytes.push(tapeName.charCodeAt(t));
+   header_bytes.push(0x00);  
    
+   if(laser500) {
+      // laser 500 has additional bytes and a marker to allow print of file name      
+      // laser 310 elongates the last pulse of the "0" bit to allow print of file name      
+      for(let t=0; t<5; t++) header_bytes.push(0x80);  // additional header to allow print of file name
+      for(let t=0; t<10; t++) header_bytes.push(0x80); 
+      header_bytes.push(0xff);                         // end of header          
+   }
+      
    // start address
-   bytes.push(lo(startAddress));
-   bytes.push(hi(startAddress));
+   body_bytes.push(lo(startAddress));
+   body_bytes.push(hi(startAddress));
 
    // end address
    const endAddress = startAddress + program.length;
-   bytes.push(lo(endAddress));
-   bytes.push(hi(endAddress));
+   body_bytes.push(lo(endAddress));
+   body_bytes.push(hi(endAddress));
 
    // program
-   for(let t=0; t<program.length; t++) bytes.push(program[t]);
+   for(let t=0; t<program.length; t++) body_bytes.push(program[t]);
 
    // checksum 
    const checksum = calculate_checksum(program, startAddress, endAddress);
-   bytes.push(lo(checksum));
-   bytes.push(hi(checksum));
+   body_bytes.push(lo(checksum));
+   body_bytes.push(hi(checksum));
 
    // terminator
-   for(let t=0; t<tailLen; t++) bytes.push(0x00);   
+   for(let t=0; t<tailLen; t++) body_bytes.push(0x00);   
    
-   return bytes;
+   return { header_bytes, body_bytes };
 }
 
 function bytesToBits(bytes: number[]): number[] {
    const bits = [];
    for(let t=0; t<bytes.length; t++) {
-      const b = bytes[t];
+      const b = bytes[t] & 0xFF;
       bits.push((b & 128) >> 7);
       bits.push((b &  64) >> 6);
       bits.push((b &  32) >> 5);
@@ -267,13 +326,7 @@ function pulsesToSamples(tapeBits: Pulse[], tape: Tape): number[] {
    const samples = [];
    let ptr = 0;
 
-   const { SAMPLE_RATE, VOLUME, PULSE_LONG, PULSE_SHORT, SILENCE_START, SILENCE_END } = tape;
-
-   const sstart = SILENCE_START * SAMPLE_RATE; 
-   const send   = SILENCE_END   * SAMPLE_RATE;
-
-   // insert silence at start
-   for(let t=0; t<sstart; t++) samples.push(0);
+   const { SAMPLE_RATE, VOLUME, PULSE_LONG, PULSE_SHORT } = tape;
 
    for(let t=0; t<tapeBits.length; t++) {
       if(tapeBits[t]==="S") {         
@@ -285,12 +338,21 @@ function pulsesToSamples(tapeBits: Pulse[], tape: Tape): number[] {
          for(;ptr<PULSE_LONG; ptr++) samples.push(-VOLUME);   ptr -= PULSE_LONG;
       }      
    }
-
-   // insert silence at end
-   for(let t=0; t<send; t++) samples.push(0);
    
    return samples;
 }
 
+function getGapSamples(tape: Tape): number[] {
+   const samples = [];
+   let ptr = 0;
+
+   const { VOLUME, PULSE_SHORT } = tape;
+
+   for(let t=0; t<11; t++) {      
+      for(;ptr<PULSE_SHORT; ptr++) samples.push(-VOLUME);  ptr -= PULSE_SHORT;
+   }
+   
+   return samples;
+}
 
 main();
