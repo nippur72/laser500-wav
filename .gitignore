@@ -4,4 +4,3 @@ turbo_tape/tools/
 *.o
 *.lis
 *.wav
-*.bin
