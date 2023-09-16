@@ -40,7 +40,7 @@ export function packvz(filename: string, type: number, start: number, data: Uint
    return new Uint8Array(VZ);
 }
 
-interface VZInfo {
+export interface VZInfo {
    filename: string;
    type: VZFILETYPE;
    start: number;

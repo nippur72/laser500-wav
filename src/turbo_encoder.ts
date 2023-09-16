@@ -3,8 +3,8 @@
 // ************************************************************************ 
 
 import { calculate_checksum } from "./checksum";
-import { Tape, TurboTape } from "./laser500wav";
 import { hi, lo } from "./bytes";
+import { Tape, TurboTape } from "./tape_creator";
 
 export function decodeBitSize(speed: number, SAMPLE_RATE: number, laser500: boolean) {
 
