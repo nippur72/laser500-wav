@@ -3,4 +3,8 @@ test/
 turbo_tape/tools/
 *.o
 *.lis
+*.bin
+*.reloc
+*.sym
 *.wav
+
