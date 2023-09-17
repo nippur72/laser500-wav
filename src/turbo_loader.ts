@@ -1,6 +1,7 @@
 import { hex } from "./bytes";
 import { turbo_L310_asm_info } from "./turbo_L310_asm_info";
 import { turbo_L500_asm_info } from "./turbo_L500_asm_info";
+import { VZ_BINARY } from "./vz";
 
 type AsmInfo = typeof turbo_L310_asm_info | typeof turbo_L500_asm_info;
 
@@ -13,6 +14,8 @@ export function getTurboLoader(laser500: boolean, THRESHOLD: number, relocate_ad
    patch_bytes(loader_program, THRESHOLD, fileType, asm_info);
    const relocated = relocate(loader_program, relocate_address, asm_info);
    
+   console.log(`turbo loader routine at ${hex(relocate_address,4)}-${hex(relocate_address+loader_program.length-1,4)}`);
+
    // for debug purposes
    {   
       let set_threshold = asm_info.symbols["set_threshold"] + relocate_address;

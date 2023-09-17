@@ -18,5 +18,6 @@ export interface TurboTape {
     THRESHOLD: number;
     TURBO_HALFPULSE_SIZE: number;
     TURBO_INVERT: boolean;
+    TURBO_ADDRESS: number | undefined;
 }
 export declare function VZ_to_WAV(VZ: VZInfo, options: TypedOptions): ArrayBuffer;

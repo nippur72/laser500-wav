@@ -3,7 +3,7 @@
 // ************************************************************************ 
 
 import { calculate_checksum } from "./checksum";
-import { hi, lo } from "./bytes";
+import { hex, hi, lo } from "./bytes";
 import { Tape, TurboTape } from "./tape_creator";
 
 export function decodeBitSize(speed: number, SAMPLE_RATE: number, laser500: boolean) {
@@ -72,11 +72,9 @@ export function getTurboBytes(startAddress: number, program: Buffer) {
 
    // terminator (allows receiver to go past bad bits and report load error)
    for(let t=0;t<64;t++) bytes.push(0x00);    
-
-   console.log("TURBO TAPE INFO:");
-   console.log(`address: ${startAddress.toString(16)}`);
-   console.log(`length: ${length.toString(16)}`);
-   console.log(`checksum: ${checksum.toString(16)}`);
+   
+   console.log(`program: ${hex(startAddress,4)}-${hex(startAddress+length-1,4)} (${length} bytes)`);
+   console.log(`checksum: ${hex(checksum,4)}`);
 
    return bytes;
 }

@@ -10,5 +10,7 @@ export interface CommandLineOptions {
     turbo: number;
     l500: boolean;
     l310: boolean;
+    address: string;
 }
 export declare const options: CommandLineOptions;
+export declare function printHelp(): void;

@@ -26,8 +26,9 @@ function getNormalSamples(tape) {
     return samples;
 }
 function getTurboSamples(tape, turbo) {
+    var _a;
     const { startAddress, program } = tape;
-    const turbo_address = startAddress + program.length;
+    const turbo_address = (_a = turbo.TURBO_ADDRESS) !== null && _a !== void 0 ? _a : startAddress + program.length;
     const loader_program = (0, turbo_loader_1.getTurboLoader)(tape.laser500, turbo.THRESHOLD, turbo_address, tape.fileType);
     tape.fileType = vz_1.VZ_BINARY;
     tape.startAddress = turbo_address;
@@ -55,7 +56,7 @@ function tapeStructure(tape) {
     const header_bytes = [];
     const body_bytes = [];
     const { tapeName, fileType, startAddress, program, headerLen, tailLen, laser500 } = tape;
-    // header   
+    // header
     for (let t = 0; t < headerLen; t++)
         header_bytes.push(0x80);
     for (let t = 0; t < 5; t++)
@@ -67,13 +68,13 @@ function tapeStructure(tape) {
         header_bytes.push(tapeName.charCodeAt(t));
     header_bytes.push(0x00);
     if (laser500) {
-        // laser 500 has additional bytes and a marker to allow print of file name      
-        // laser 310 elongates the last pulse of the "0" bit to allow print of file name      
+        // laser 500 has additional bytes and a marker to allow print of file name
+        // laser 310 elongates the last pulse of the "0" bit to allow print of file name
         for (let t = 0; t < 5; t++)
             header_bytes.push(0x80); // additional header to allow print of file name
         for (let t = 0; t < 10; t++)
             header_bytes.push(0x80);
-        header_bytes.push(0xff); // end of header          
+        header_bytes.push(0xff); // end of header
     }
     // start address
     body_bytes.push((0, bytes_1.lo)(startAddress));
@@ -85,7 +86,7 @@ function tapeStructure(tape) {
     // program
     for (let t = 0; t < program.length; t++)
         body_bytes.push(program[t]);
-    // checksum 
+    // checksum
     const checksum = (0, checksum_1.calculate_checksum)(program, startAddress, endAddress);
     body_bytes.push((0, bytes_1.lo)(checksum));
     body_bytes.push((0, bytes_1.hi)(checksum));
@@ -167,7 +168,7 @@ function VZ_to_WAV(VZ, options) {
     const SAMPLE_RATE = options.samplerate;
     const VOLUME = options.volume;
     const HEADER_LEN = options.header;
-    const TAIL_LEN = 4; // 128; 
+    const TAIL_LEN = 4; // 128;
     const pulsems = options.pulsems / 1000000; // for a total of 277 microseconds
     const PULSE_SHORT = pulsems * SAMPLE_RATE;
     const PULSE_LONG = PULSE_SHORT * 2;
@@ -175,7 +176,8 @@ function VZ_to_WAV(VZ, options) {
     const turbo = {
         THRESHOLD: turboparams.THRESHOLD,
         TURBO_HALFPULSE_SIZE: turboparams.TURBO_HALFPULSE_SIZE,
-        TURBO_INVERT: turboparams.TURBO_INVERT
+        TURBO_INVERT: turboparams.TURBO_INVERT,
+        TURBO_ADDRESS: options.address !== undefined ? parseInt(options.address, 16) : undefined
     };
     const fileType = VZ.type;
     const tape = {

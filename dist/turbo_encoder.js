@@ -58,10 +58,8 @@ function getTurboBytes(startAddress, program) {
     // terminator (allows receiver to go past bad bits and report load error)
     for (let t = 0; t < 64; t++)
         bytes.push(0x00);
-    console.log("TURBO TAPE INFO:");
-    console.log(`address: ${startAddress.toString(16)}`);
-    console.log(`length: ${length.toString(16)}`);
-    console.log(`checksum: ${checksum.toString(16)}`);
+    console.log(`program: ${(0, bytes_1.hex)(startAddress, 4)}-${(0, bytes_1.hex)(startAddress + length - 1, 4)} (${length} bytes)`);
+    console.log(`checksum: ${(0, bytes_1.hex)(checksum, 4)}`);
     return bytes;
 }
 exports.getTurboBytes = getTurboBytes;

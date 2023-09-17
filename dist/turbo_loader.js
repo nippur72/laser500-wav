@@ -11,6 +11,7 @@ function getTurboLoader(laser500, THRESHOLD, relocate_address, fileType) {
     const loader_program = asm_info.code;
     patch_bytes(loader_program, THRESHOLD, fileType, asm_info);
     const relocated = relocate(loader_program, relocate_address, asm_info);
+    console.log(`turbo loader routine at ${(0, bytes_1.hex)(relocate_address, 4)}-${(0, bytes_1.hex)(relocate_address + loader_program.length - 1, 4)}`);
     // for debug purposes
     {
         let set_threshold = asm_info.symbols["set_threshold"] + relocate_address;
