@@ -197,7 +197,7 @@ function VZ_to_WAV(VZ, options) {
     console.log(`SAVING ${fileType === vz_1.VZ_BASIC ? "T" : "B"}: '${VZ.filename}' from $${(0, bytes_1.hex)(VZ.start, 4)}, ${VZ.data.length} bytes`);
     let samples;
     // normal tape
-    if (options.turbo === undefined) {
+    if (options.turbo === 0) {
         samples = getNormalSamples(tape);
     }
     else {

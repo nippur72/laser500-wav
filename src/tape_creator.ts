@@ -243,7 +243,7 @@ export function VZ_to_WAV(VZ: VZInfo, options: TypedOptions) {
     let samples: number[];
 
     // normal tape
-    if(options.turbo === undefined) {
+    if(options.turbo === 0) {
        samples = getNormalSamples(tape);
     }
     else {
